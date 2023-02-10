@@ -132,6 +132,8 @@ for arg in sys.argv[1:]:
         colors = arg[len("-colors="):].split(",")
     elif arg.startswith("-markersize="):
         markersize = float(arg[len("-markersize="):])
+    elif arg.startswith("-linewidths="):
+        linewidth = arg[len("-linewidths="):].split(",")
     elif arg.startswith("-xticks="):
         xticks = arg[len("-xticks="):].split(",")
     elif arg.startswith("-yticks="):
@@ -291,7 +293,10 @@ for d in data:
         kwargs['linestyle'] = linestyles[i%len(linestyles)]
     
     if linewidth:
-        kwargs['lw'] = linewidth
+        if type(linewidth) is list:
+            kwargs['lw'] = linewidth[i%len(linewidth)]
+        else:
+            kwargs['lw'] = linewidth
     
     if markersize:
         kwargs['markersize'] = markersize
