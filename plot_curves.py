@@ -3,167 +3,149 @@
 import math
 import sys
 import re
+import argparse
 
-colors = ['#377eb8', '#ff7f00', '#e41a1c', '#f781bf', '#a65628', '#4daf4a', '#984ea3', '#999999', '#dede00', '#377eb8']
-markers = ['^', 's', 'o', '+', 'x', '*']
-linestyles = ["-.", ":", "--", "-"]
+# Moves all unqualified "named" arguments to the front of the program args.
+# This allows to use the script with constructs like 
+# "datafile1 -l=Label1 datafile2 -l=Label2 ..."
+def move_unqualified_args_to_front():
+    print(f"Args before: {sys.argv}")
+    optargs = []
+    namedargs = [sys.argv[0]]
+    next_is_value = False
+    for arg in sys.argv[1:]:
+        if re.match(r'-[A-Za-z0-9_-]+=.+', arg):
+            # argument with "="
+            optargs += [arg]
+        elif re.match(r'-[A-Za-z0-9_-]+', arg):
+            # option
+            next_is_value = True
+            optargs += [arg]
+        elif next_is_value:
+            # value
+            next_is_value = False
+            optargs += [arg]
+        else:
+            # unqualified "named" argument!
+            namedargs += [arg]
+    sys.argv = namedargs + optargs
+    print(f"Args after: {sys.argv}")
 
-lim = -1
+def unpack_comma_separated_options(argvalue):
+    if not argvalue:
+        return
+    argvalue = argvalue.split(',')
+    print(argvalue)
 
-msize = 10
-pltxsize = 5
-pltysize = 5
+parser = argparse.ArgumentParser(description='Plot a number of curves.')
 
-files = []
-data = []
-labels = []
-use_twin_axis = []
-explicit_xvals = False
-colorvals = False
-do_markers = True
-do_lines = True
-do_linestyles = True
-do_legend = True
-do_xgrid = False
-do_ygrid = False
-logx = False
-logy = False
-xlabel = None
-ylabel = None
-y2label = None
-xmin = None
-xmax = None
-ymin = None
-ymax = None
-y2min = None
-y2max = None
-confidence_area = False
-legend_right = False
-rectangular = False
-linewidth = None
-lloc = 0
-extend_to_right = False
-xticks = None
-yticks = None
-y2ticks = None
-markersize = None
-timesfont = False
-sansfont = False
+parser.add_argument('-logx', '--logx', '-log-x', '--log-x', action="store_true", 
+                    help='Enable logarithmic scale for x axis')
+parser.add_argument('-logy', '--logy', '-log-y', '--log-y', action="store_true", 
+                    help='Enable logarithmic scale for y axis')
+parser.add_argument('-y2', '--y2', action="store_true", 
+                    help='Enable 2nd y axis on the right')
+parser.add_argument('-nomarkers', '--nomarkers', '-no-markers', '--no-markers', 
+                    action="store_true", help='Disable markers')
+parser.add_argument('-nolinestyles', '--nolinestyles', '-no-linestyles', '--no-linestyles', 
+                    action="store_true", help='Disable line styles')
+parser.add_argument('-nolines', '--nolines', '-no-lines', '--no-lines', 
+                    action="store_true", help='Disable lines')
+parser.add_argument('-nolegend', '--nolegend', '-no-legend', '--no-legend', 
+                    action="store_true", help='Disable legend')
+parser.add_argument('-confidence', '--confidence',
+                    action="store_true", help='Add confidence area')
+parser.add_argument('-legendright', '--legendright', '-legend-right', '--legend-right',
+                    action="store_true", help='Move legend to the right outside of the plot')
+parser.add_argument('-rect', '--rect',
+                    action="store_true", help='Plot connecting lines between points in a rectangular fashion')
+parser.add_argument('-extend-to-right', '--extend-to-right',
+                    action="store_true", help='Extend lines after the final data point to the right until -max-x value')
+parser.add_argument('-sansfont', '--sans-font',
+                    action="store_true", help='Use LaTeX sans serif font')
+parser.add_argument('-timesfont', '--times-font',
+                    action="store_true", help='Use Times New Roman like font')
+parser.add_argument('-gridx', '--gridx', '-grid-x', '--grid-x',
+                    action="store_true", help='Draw grid along x direction')
+parser.add_argument('-gridy', '--gridy', '-grid-y', '--grid-y',
+                    action="store_true", help='Draw grid along y direction')
+parser.add_argument('-grid', '--grid',
+                    action="store_true", help='Draw grid along both directions')
+parser.add_argument('-xyc', '--xyc',
+                    action="store_true", help='Expect x coordinate, y coordinate, and color value for each data point')
+parser.add_argument('-xy', '--xy',
+                    action="store_true", help='Expect x coordinate and y coordinate for each data point')
 
-outfile = None
+parser.add_argument('-legend-spacing', '--legend-spacing', type=float, default=0.5, help='Vertical spacing between legend items')
+parser.add_argument('-lloc', '--lloc', '-legend-location', '--legend-location', type=int, default=0,
+                    help='(PyPlot) location of legend')
+parser.add_argument('-sizex', '--sizex', '-size-x', '--size-x', type=float, default=4, help='Plot width')
+parser.add_argument('-sizey', '--sizey', '-size-y', '--size-y', type=float, default=4, help='Plot height')
+parser.add_argument('-size', '--size', type=float, help='Plot size (width and height)')
+parser.add_argument('-lw', '--lw', '-linewidth', '--linewidth', type=float, default=1, help='Line width')
+parser.add_argument('-markersize', '--markersize', '-marker-size', '--marker-size', type=float, help='Marker size')
 
-heading = ""
-for arg in sys.argv[1:]:
-    if re.search(r'--?log(scale)?-?x', arg):
-        logx = True
-    elif re.search(r'--?log(scale)?-?y', arg):
-        logy = True
-    elif re.search(r'--?no-?markers?', arg):
-        do_markers = False
-    elif re.search(r'--?no-?linestyles?', arg):
-        do_linestyles = False
-    elif re.search(r'--?no-?lines?', arg):
-        do_lines = False
-        do_linestyles = False
-    elif re.search(r'--?no-?legend', arg):
-        do_legend = False
-    elif re.search(r'--?xgrid', arg):
-        do_xgrid = True
-    elif re.search(r'--?ygrid', arg):
-        do_ygrid = True
-    elif re.search(r'--?grid', arg):
-        do_xgrid = True
-        do_ygrid = True
-    elif arg.startswith("-xyc") or arg.startswith("--xyc"):
-        explicit_xvals = True
-        colorvals = True
-    elif arg.startswith("-xy") or arg.startswith("--xy"):
-        explicit_xvals = True
-    elif arg.startswith("-size="):
-        pltxsize = float(arg[6:])
-        pltysize = float(arg[6:])
-    elif arg.startswith("-xsize="):
-        pltxsize = float(arg[7:])
-    elif arg.startswith("-ysize="):
-        pltysize = float(arg[7:])
-    elif arg.startswith("-l="):
-        labels += [arg[3:]]
-    elif arg.startswith("-xlabel="):
-        xlabel = arg[8:]
-    elif arg.startswith("-ylabel="):
-        ylabel = arg[8:]
-    elif arg.startswith("-y2label="):
-        y2label = arg[9:]
-    elif arg.startswith("-xmin="):
-        xmin = float(arg[6:])
-    elif arg.startswith("-xmax="):
-        xmax = float(arg[6:])
-    elif arg.startswith("-ymin="):
-        ymin = float(arg[6:])
-    elif arg.startswith("-y2min="):
-        y2min = float(arg[7:])
-    elif arg.startswith("-ymax="):
-        ymax = float(arg[6:])
-    elif arg.startswith("-y2max="):
-        y2max = float(arg[7:])
-    elif arg.startswith("-lw="):
-        linewidth = float(arg[4:])
-    elif arg.startswith("-title="):
-        heading = arg[7:]
-    elif arg.startswith("-y2"):
-        use_twin_axis[-1] = True
-    elif arg.startswith("-o="):
-        outfile = arg[3:]
-    elif arg.startswith("-lloc="):
-        lloc = int(arg[len("-lloc="):])
-    elif arg.startswith("-confidence") or arg.startswith("--confidence"):
-        confidence_area = True
-    elif arg == "-legendright" or arg == "--legendright":
-        legend_right = True
-    elif arg == "-rect" or arg == "--rect":
-        rectangular = True
-    elif arg == "-extend-to-right" or arg == "--extend-to-right":
-        extend_to_right = True
-    elif arg.startswith("-markers="):
-        markers = arg[len("-markers="):].split(",")
-    elif arg.startswith("-linestyles="):
-        linestyles = arg[len("-linestyles="):].split(",")
-    elif arg.startswith("-colors="):
-        colors = arg[len("-colors="):].split(",")
-    elif arg.startswith("-markersize="):
-        markersize = float(arg[len("-markersize="):])
-    elif arg.startswith("-linewidths="):
-        linewidth = arg[len("-linewidths="):].split(",")
-    elif arg.startswith("-xticks="):
-        xticks = arg[len("-xticks="):].split(",")
-    elif arg.startswith("-yticks="):
-        yticks = arg[len("-yticks="):].split(",")
-    elif arg.startswith("-y2ticks="):
-        y2ticks = arg[len("-y2ticks="):].split(",")
-    elif arg.startswith("-timesfont"):
-        timesfont = True
-    elif arg.startswith("-sansfont"):
-        sansfont = True
-    else:
-        files += [arg]
-        use_twin_axis += [False]
+parser.add_argument('datafile', type=str, help='Add data file with whitespace-separated values', action='append', nargs='*')
+parser.add_argument('-y2data', '--y2data', '-y2-data', '--y2-data', action='append', nargs='*',
+                    type=str, help='Add data file, mapped to 2nd y axis, with whitespace-separated values')
+parser.add_argument('-l', '--label', help='Add curve label', action='append', nargs=1, default=[])
+
+parser.add_argument('-minx', '--minx', '-min-x', '--min-x', type=float, help='Minimum x value')
+parser.add_argument('-maxx', '--maxx', '-max-x', '--max-x', type=float, help='Maximum x value')
+parser.add_argument('-miny', '--miny', '-min-y', '--min-y', type=float, help='Minimum y value')
+parser.add_argument('-maxy', '--maxy', '-max-y', '--max-y', type=float, help='Maximum y value')
+parser.add_argument('-miny2', '--miny2', '-min-y2', '--min-y2', type=float, help='Minimum 2nd y value')
+parser.add_argument('-maxy2', '--maxy2', '-max-y2', '--max-y2', type=float, help='Maximum 2nd y value')
+parser.add_argument('-labelx', '--labelx', '-label-x', '--label-x', type=str, help='Label of x axis')
+parser.add_argument('-labely', '--labely', '-label-y', '--label-y', type=str, help='Label of y axis')
+parser.add_argument('-labely2', '--labely2', '-label-y2', '--label-y2', type=str, help='Label of 2nd y axis')
+parser.add_argument('-title', '--title', type=str, help='Title text above the plot')
+parser.add_argument('-o', '--o', '--output', type=str, help='Output file')
+
+parser.add_argument('-colors', '--colors', type=str, help='Comma-separated (Pythonic) color values to cycle through',
+                    default='#377eb8,#ff7f00,#e41a1c,#f781bf,#a65628,#4daf4a,#984ea3,#999999,#dede00,#377eb8')
+parser.add_argument('-markers', '--markers', type=str, help='Comma-separated (Pythonic) marker symbols to cycle through',
+                    default='^,s,o,+,x,*')
+parser.add_argument('-linestyles', '--linestyles', type=str, help='Comma-separated (Pythonic) linestyle symbols to cycle through',
+                    default='-.,:,--,-')
+parser.add_argument('-linewidths', '--linewidths', '-line-widths', '--line-widths', type=str, default='',
+                    help='Comma-separated line widths to cycle through')
+parser.add_argument('-ticksx', '--ticksx', '-ticks-x', '--ticks-x', type=str, default='',
+                    help='Comma-separated tick values for x axis')
+parser.add_argument('-ticksy', '--ticksy', '-ticks-y', '--ticks-y', type=str, default='',
+                    help='Comma-separated tick values for y axis')
+parser.add_argument('-ticksy2', '--ticksy2', '-ticks-y2', '--ticks-y2', type=str, default='',
+                    help='Comma-separated tick values for 2nd y axis')
+
+move_unqualified_args_to_front()
+args = parser.parse_args()
+args.colorslist = args.colors.split(',') if args.colors else []
+args.markerslist = args.markers.split(',') if args.markers else []
+args.linestyleslist = args.linestyles.split(',') if args.linestyles else []
+args.linewidthslist = args.linewidths.split(',') if args.linewidths else []
+args.ticksxlist = args.ticksx.split(',') if args.ticksx else []
+args.ticksylist = args.ticksy.split(',') if args.ticksy else []
+args.ticksy2list = args.ticksy2.split(',') if args.ticksy2 else []
+args.labellist = [l for labels in args.label for l in labels]
+
+print(args)
 
 import matplotlib
-if outfile:
+if args.o:
     matplotlib.use('pdf')
 matplotlib.rcParams['hatch.linewidth'] = 0.5  # previous pdf hatch linewidth
 import matplotlib.pyplot as plt
 from matplotlib import rc
 
 rc('text', usetex=True)
-if sansfont:
+if args.sans_font:
     matplotlib.rcParams['text.latex.preamble'] = [r'\usepackage[cm]{sfmath}']
     matplotlib.rcParams['font.family'] = 'sans-serif'
     matplotlib.rcParams['font.sans-serif'] = 'cm'
     #\renewcommand\familydefault{\sfdefault} 
 else:
     rc('font', family='serif')
-    if timesfont:
+    if args.times_font:
         rc('font', serif=['Times'])
 
 def process_line(line, X, Y, C, lc):
@@ -178,11 +160,11 @@ def process_line(line, X, Y, C, lc):
             return
     
     num_ys = len(words)
-    if colorvals:
+    if args.xyc:
         num_ys -= 1
     
     if not Y:
-        if explicit_xvals:
+        if args.xy or args.xyc:
             for i in range(1, num_ys):
                 Y += [[]]
         else:
@@ -190,14 +172,14 @@ def process_line(line, X, Y, C, lc):
                 Y += [[]]
         
     # X value
-    if rectangular and len(X) > 0:
+    if args.rect and len(X) > 0:
         x = float(words[0])-0.0001
         X += [x]
-    if explicit_xvals:
+    if args.xy or args.xyc:
         x = float(words[0])
         X += [x]
         words = words[1:]
-        if colorvals:
+        if args.xyc:
             C += [int(words[-1])]
             words = words[0:-1]
     else:
@@ -206,11 +188,15 @@ def process_line(line, X, Y, C, lc):
     # Y values
     for i in range(len(words)):
         y = float(words[i])
-        if rectangular and len(Y[i]) > 0:
+        if args.rect and len(Y[i]) > 0:
             Y[i] += [Y[i][-1]]
         Y[i] += [y]
 
-if not files:
+data = []
+datanames = []
+is_data_on_y2 = []
+
+if not args.datafile or args.datafile == [[]]:
     # Read from stdin
     X = []
     Y = []
@@ -223,9 +209,20 @@ if not files:
     print("stdin:",str(len(X)),"vals")
     for vals in Y:
         data += [[X, vals, C]]
+        is_data_on_y2 += [False]
     
 else:
-    for arg in files:
+    print("Files specified")
+    files_y1 = [(f, False) for arg in args.datafile for f in arg]
+    files_y2 = []
+    if args.y2data:
+        files_y2 = [(f, True) for arg in args.y2data for f in arg]
+    print(files_y1)
+    print(files_y2)
+    files = files_y1 + files_y2
+    print(files)
+    
+    for (arg, y2) in files:
         X = []
         Y = []
         C = []
@@ -233,33 +230,33 @@ else:
         for line in open(arg, 'r').readlines():
             process_line(line, X, Y, C, lc)
             lc += 1
-        if extend_to_right and xmax is not None and X[-1] < xmax:
+        if args.extend_to_right and args.maxx and X[-1] < args.maxx:
             if len(C) == len(X):
                 C += [C[-1]]
-            X += [xmax+(xmax-xmin)]
+            X += [args.maxx+(args.maxx-args.minx)]
             for Ys in Y:
                 Ys += [Ys[-1]]
             
         print(arg,":",str(len(X)),"vals")
         for vals in Y:
             data += [[X, vals, C]]
+            datanames += [arg]
+            is_data_on_y2 += [y2]
 
-
-fig, ax = plt.subplots(1, 1, figsize=(pltxsize,pltysize))
+fig, ax = plt.subplots(1, 1, figsize=(args.sizex, args.sizey))
 
 ax.set_axisbelow(True)
-if do_xgrid and do_ygrid:
-    plt.grid(axis='both')
-elif do_xgrid:
-    plt.grid(axis='x')
-elif do_ygrid:
-    plt.grid(axis='y')
+if args.gridx and args.gridy:
+    plt.grid(axis='both', color='#dddddd')
+elif args.gridx:
+    plt.grid(axis='x', color='#dddddd')
+elif args.gridy:
+    plt.grid(axis='y', color='#dddddd')
 
-if confidence_area:
+if args.confidence:
     plt.fill_between(data[1][0], data[1][1], data[2][1], color='#ccccff')
 
-twin_axis_used = sum([x for x in use_twin_axis if x]) > 0
-if twin_axis_used:
+if args.y2:
     ax = plt.gca()
     ax2 = ax.twinx()
 
@@ -269,91 +266,86 @@ for d in data:
     
     kwargs = dict()
     
-    if i < len(labels):
-        kwargs['label'] = labels[i]
-    
-    if colorvals:
-        kwargs['color'] = [colors[x%len(colors)] for x in d[2]]
+    if i < len(args.labellist):
+        kwargs['label'] = args.labellist[i]
     else:
-        kwargs['color'] = colors[i%len(colors)]
-        
-    if do_markers:
-        kwargs['marker'] = markers[i%len(markers)]
+        kwargs['label'] = datanames[i].replace('_', '-')
+    
+    if args.xyc:
+        kwargs['color'] = [args.colorslist[x%len(args.colorslist)] for x in d[2]]
+    else:
+        kwargs['color'] = args.colorslist[i%len(args.colorslist)]
+
+    if not args.nomarkers and args.markers:
+        kwargs['marker'] = args.markerslist[i%len(args.markerslist)]
         if kwargs['marker'] in ['+', 'x']:
             kwargs['markerfacecolor'] = kwargs['color']
         else:
             kwargs['markerfacecolor'] = 'none'
     
-    if not do_lines:
+    if not args.nolinestyles:
+        kwargs['linestyle'] = args.linestyleslist[i%len(args.linestyleslist)]
+    
+    if args.linewidthslist:
+        kwargs['lw'] = args.linewidthslist[i%len(args.linewidthslist)]
+    elif args.nolines:
         kwargs['lw'] = 0
+    elif args.lw:
+        kwargs['lw'] = args.lw
+    
+    if args.markersize:
+        kwargs['markersize'] = args.markersize
+    
+    if is_data_on_y2[i]:
+        ax2.plot(d[0], d[1], **kwargs)
     else:
-        kwargs['lw'] = 1
-        
-    if do_linestyles:
-        kwargs['linestyle'] = linestyles[i%len(linestyles)]
-    
-    if linewidth:
-        if type(linewidth) is list:
-            kwargs['lw'] = linewidth[i%len(linewidth)]
-        else:
-            kwargs['lw'] = linewidth
-    
-    if markersize:
-        kwargs['markersize'] = markersize
-    
-    if twin_axis_used:
-        if use_twin_axis[i]:
-            ax2.plot(d[0], d[1], **kwargs)
-        else:
-            ax.plot(d[0], d[1], **kwargs)
-    else:
-        plt.plot(d[0], d[1], **kwargs)
+        ax.plot(d[0], d[1], **kwargs)
     i += 1
 
-if heading:
-    plt.title(heading)
-if logx:
+if args.title:
+    plt.title(args.title)
+if args.logx:
     plt.xscale("log")
-if logy:
+if args.logy:
     plt.yscale("log")
-if twin_axis_used:
-    ax.set_xlabel(xlabel)
-    ax.set_ylim(ymin, ymax)
-    ax.set_ylabel(ylabel)
-    ax2.set_ylim(y2min, y2max)
-    ax2.set_ylabel(y2label)
+if args.y2:
+    ax.set_xlabel(args.labelx)
+    ax.set_ylim(args.miny, args.maxy)
+    ax.set_ylabel(args.labely)
+    ax2.set_ylim(args.miny2, args.maxy2)
+    ax2.set_ylabel(args.labely2)
 else:
-    if xlabel:
-        plt.xlabel(xlabel)
-    if ylabel:
-        plt.ylabel(ylabel)
-    plt.ylim(ymin, ymax)
-    plt.xlim(xmin, xmax)
+    if args.labelx:
+        plt.xlabel(args.labelx)
+    if args.labely:
+        plt.ylabel(args.labely)
+    plt.ylim(args.miny, args.maxy)
+    plt.xlim(args.minx, args.maxx)
 
-if do_legend:
-    if legend_right:
-        plt.legend(bbox_to_anchor=(1.05, 0.5), loc='center left', edgecolor="black")
+if not args.nolegend:
+    if args.legendright:
+        plt.legend(bbox_to_anchor=(1.05, 0.5), loc='center left', edgecolor="black", labelspacing=args.legend_spacing)
     else:
-        plt.legend(loc=lloc)
+        plt.legend(loc=args.lloc, labelspacing=args.legend_spacing)
 
-if xticks:
+if args.ticksxlist:
     print("xticks")
-    ax.set_xticklabels(xticks)
-    ax.set_xticks([float(x) for x in xticks])
+    ax.set_xticklabels(args.ticksxlist)
+    ax.set_xticks([float(x) for x in args.ticksxlist])
     plt.minorticks_off()
-if yticks:
+if args.ticksylist:
     print("yticks")
-    ax.set_yticklabels(yticks)
-    ax.set_yticks([float(x) for x in yticks])
+    ax.set_yticklabels(args.ticksylist)
+    ax.set_yticks([float(x) for x in args.ticksylist])
     plt.minorticks_off()
-if y2ticks:
+if args.ticksy2list:
     print("y2ticks")
-    ax2.set_yticklabels(y2ticks)
-    ax2.set_yticks([float(x) for x in y2ticks])
+    ax2.set_yticklabels(args.ticksy2list)
+    ax2.set_yticks([float(x) for x in args.ticksy2list])
     plt.minorticks_off()
 
 plt.tight_layout()
-if outfile:
-    plt.savefig(outfile)#, dpi=600, format='eps')
+if args.o:
+    plt.savefig(args.o) #, dpi=600, format='eps')
 else:
-    plt.show() 
+    plt.show()
