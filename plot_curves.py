@@ -75,6 +75,8 @@ parser.add_argument('-xyc', '--xyc',
                     action="store_true", help='Expect x coordinate, y coordinate, and color value for each data point')
 parser.add_argument('-xy', '--xy',
                     action="store_true", help='Expect x coordinate and y coordinate for each data point')
+parser.add_argument('-potticks', '--potticks',
+                    action="store_true", help='Force continuous power-of-ten ticks and labels for both axes')
 
 parser.add_argument('-legend-spacing', '--legend-spacing', type=float, default=0.5, help='Vertical spacing between legend items')
 parser.add_argument('-lloc', '--lloc', '-legend-location', '--legend-location', type=int, default=0,
@@ -267,7 +269,8 @@ for d in data:
     kwargs = dict()
     
     if i < len(args.labellist):
-        kwargs['label'] = args.labellist[i]
+        if args.labellist[i] != 'None':
+            kwargs['label'] = args.labellist[i]
     else:
         kwargs['label'] = datanames[i].replace('_', '-')
     
@@ -328,21 +331,47 @@ if not args.nolegend:
     else:
         plt.legend(loc=args.lloc, labelspacing=args.legend_spacing)
 
-if args.ticksxlist:
-    print("xticks")
-    ax.set_xticklabels(args.ticksxlist)
-    ax.set_xticks([float(x) for x in args.ticksxlist])
-    plt.minorticks_off()
-if args.ticksylist:
-    print("yticks")
-    ax.set_yticklabels(args.ticksylist)
-    ax.set_yticks([float(x) for x in args.ticksylist])
-    plt.minorticks_off()
-if args.ticksy2list:
-    print("y2ticks")
-    ax2.set_yticklabels(args.ticksy2list)
-    ax2.set_yticks([float(x) for x in args.ticksy2list])
-    plt.minorticks_off()
+if args.potticks:
+    
+    power = -10
+    while 10**power < args.minx:
+        power += 1
+    tickpos = []
+    ticklabel = []
+    while 10**power <= args.maxx:
+        tickpos += [10**power]
+        ticklabel += ["$10^{"+str(power)+"}$"]
+        power += 1
+    ax.set_xticks(tickpos)
+    ax.set_xticklabels(ticklabel)
+    
+    power = -10
+    while 10**power < args.miny:
+        power += 1
+    tickpos = []
+    ticklabel = []
+    while 10**power <= args.maxy:
+        tickpos += [10**power]
+        ticklabel += ["$10^{"+str(power)+"}$"]
+        power += 1
+    ax.set_yticks(tickpos)
+    ax.set_yticklabels(ticklabel)
+else:
+    if args.ticksxlist:
+        print("xticks")
+        ax.set_xticklabels(args.ticksxlist)
+        ax.set_xticks([float(x) for x in args.ticksxlist])
+        plt.minorticks_off()
+    if args.ticksylist:
+        print("yticks")
+        ax.set_yticklabels(args.ticksylist)
+        ax.set_yticks([float(x) for x in args.ticksylist])
+        plt.minorticks_off()
+    if args.ticksy2list:
+        print("y2ticks")
+        ax2.set_yticklabels(args.ticksy2list)
+        ax2.set_yticks([float(x) for x in args.ticksy2list])
+        plt.minorticks_off()
 
 plt.tight_layout()
 if args.o:
