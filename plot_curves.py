@@ -57,6 +57,8 @@ parser.add_argument('-confidence', '--confidence',
                     action="store_true", help='Add confidence area')
 parser.add_argument('-legendright', '--legendright', '-legend-right', '--legend-right',
                     action="store_true", help='Move legend to the right outside of the plot')
+parser.add_argument('-nolegendborder', '--nolegendborder', '-no-legend-border', '--no-legend-border',
+                    action="store_true", help='Remove border around legend')
 parser.add_argument('-rect', '--rect',
                     action="store_true", help='Plot connecting lines between points in a rectangular fashion')
 parser.add_argument('-extend-to-right', '--extend-to-right',
@@ -77,6 +79,10 @@ parser.add_argument('-xy', '--xy',
                     action="store_true", help='Expect x coordinate and y coordinate for each data point')
 parser.add_argument('-potticks', '--potticks',
                     action="store_true", help='Force continuous power-of-ten ticks and labels for both axes')
+parser.add_argument('-potticksx', '--potticksx',
+                    action="store_true", help='Force continuous power-of-ten ticks and labels for x axis')
+parser.add_argument('-potticksy', '--potticksy',
+                    action="store_true", help='Force continuous power-of-ten ticks and labels for < axis')
 
 parser.add_argument('-legend-spacing', '--legend-spacing', type=float, default=0.5, help='Vertical spacing between legend items')
 parser.add_argument('-lloc', '--lloc', '-legend-location', '--legend-location', type=int, default=0,
@@ -119,6 +125,9 @@ parser.add_argument('-ticksy', '--ticksy', '-ticks-y', '--ticks-y', type=str, de
 parser.add_argument('-ticksy2', '--ticksy2', '-ticks-y2', '--ticks-y2', type=str, default='',
                     help='Comma-separated tick values for 2nd y axis')
 
+parser.add_argument('-topsymbols', type=str, default='',
+                    help='Comma-separated specifications for symbols to draw at the plots top-z order. Each specification: "x;y;symbol;color"')
+
 move_unqualified_args_to_front()
 args = parser.parse_args()
 args.colorslist = args.colors.split(',') if args.colors else []
@@ -141,7 +150,7 @@ from matplotlib import rc
 
 rc('text', usetex=True)
 if args.sans_font:
-    matplotlib.rcParams['text.latex.preamble'] = [r'\usepackage[cm]{sfmath}']
+    matplotlib.rcParams['text.latex.preamble'] += r'\usepackage[cm]{sfmath}'
     matplotlib.rcParams['font.family'] = 'sans-serif'
     matplotlib.rcParams['font.sans-serif'] = 'cm'
     #\renewcommand\familydefault{\sfdefault} 
@@ -312,6 +321,7 @@ if args.logx:
 if args.logy:
     plt.yscale("log")
 if args.y2:
+    plt.xlim(args.minx, args.maxx)
     ax.set_xlabel(args.labelx)
     ax.set_ylim(args.miny, args.maxy)
     ax.set_ylabel(args.labely)
@@ -327,12 +337,13 @@ else:
 
 if not args.nolegend:
     if args.legendright:
-        plt.legend(bbox_to_anchor=(1.05, 0.5), loc='center left', edgecolor="black", labelspacing=args.legend_spacing)
+        leg = plt.legend(bbox_to_anchor=(1.05, 0.5), loc='center left', edgecolor="black", labelspacing=args.legend_spacing)
     else:
-        plt.legend(loc=args.lloc, labelspacing=args.legend_spacing)
+        leg = plt.legend(loc=args.lloc, labelspacing=args.legend_spacing)
+    if args.nolegendborder:
+        leg.get_frame().set_linewidth(0.0)
 
-if args.potticks:
-    
+if args.potticksx or args.potticks:
     power = -10
     while 10**power < args.minx:
         power += 1
@@ -344,7 +355,8 @@ if args.potticks:
         power += 1
     ax.set_xticks(tickpos)
     ax.set_xticklabels(ticklabel)
-    
+
+if args.potticksy or args.potticks:    
     power = -10
     while 10**power < args.miny:
         power += 1
@@ -356,24 +368,30 @@ if args.potticks:
         power += 1
     ax.set_yticks(tickpos)
     ax.set_yticklabels(ticklabel)
-else:
-    if args.ticksxlist:
-        print("xticks")
-        ax.set_xticklabels(args.ticksxlist)
-        ax.set_xticks([float(x) for x in args.ticksxlist])
-        plt.minorticks_off()
-    if args.ticksylist:
-        print("yticks")
-        ax.set_yticklabels(args.ticksylist)
-        ax.set_yticks([float(x) for x in args.ticksylist])
-        plt.minorticks_off()
-    if args.ticksy2list:
-        print("y2ticks")
-        ax2.set_yticklabels(args.ticksy2list)
-        ax2.set_yticks([float(x) for x in args.ticksy2list])
-        plt.minorticks_off()
+
+if not args.potticks and not args.potticksx and args.ticksxlist:
+    print("xticks")
+    ax.set_xticklabels(args.ticksxlist)
+    ax.set_xticks([float(x) for x in args.ticksxlist])
+    plt.minorticks_off()
+if not args.potticks and not args.potticksy and args.ticksylist:
+    print("yticks")
+    ax.set_yticklabels(args.ticksylist)
+    ax.set_yticks([float(x) for x in args.ticksylist])
+    plt.minorticks_off()
+if args.ticksy2list:
+    print("y2ticks")
+    ax2.set_yticklabels(args.ticksy2list)
+    ax2.set_yticks([float(x) for x in args.ticksy2list])
+    plt.minorticks_off()
 
 plt.tight_layout()
+
+if args.topsymbols:
+    for spec in args.topsymbols.split(','):
+        [xstr, ystr, symbol, color] = spec.split(';')
+        plt.plot([float(xstr)], [float(ystr)], symbol, color=color, zorder=10, markerfacecolor='None', clip_on=False)
+
 if args.o:
     plt.savefig(args.o) #, dpi=600, format='eps')
 else:
