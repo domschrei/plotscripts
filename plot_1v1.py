@@ -33,6 +33,8 @@ domainlabels = None
 domainmarkers = None
 domaincolors = None
 tickslist = None
+tickslabellist = None
+nolegend = False
 legendright = False
 legendbottom = False
 legend_columns = 1
@@ -41,6 +43,12 @@ legend_offset_y = 0
 legend_spacing = 0.5
 outfile_legend = None
 powers_of_ten_ticks = False
+sansfont = False
+timesfont = False
+minorlogticks = False
+lloc = None
+topsymbols = None
+toptexts = None
 
 for arg in sys.argv[1:]:
     if arg.startswith("-l="):
@@ -56,6 +64,7 @@ for arg in sys.argv[1:]:
         pltysize = float(arg[7:])
     elif arg.startswith("-min="):
         border_lo = float(arg[5:])
+        min_val = border_lo
     elif arg.startswith("-max="):
         border_hi = float(arg[5:])
     elif arg.startswith("-xlabel="):
@@ -66,9 +75,11 @@ for arg in sys.argv[1:]:
         lim = float(arg[3:])
         #out = lim * 1.35
         #border_hi = lim * 1.8
-        min_val = lim
+        #min_val = lim
     elif arg.startswith("-y2="):
         y2 = float(arg[4:])
+    elif arg.startswith("-nolegend"):
+        nolegend = True
     elif arg.startswith("-legend-cols="):
         legend_columns = int(arg[len("-legend-cols="):])
     elif arg.startswith("-legend-offset-x="):
@@ -77,6 +88,8 @@ for arg in sys.argv[1:]:
         legend_offset_y = float(arg[len("-legend-offset-y="):])
     elif arg.startswith("-legend-spacing="):
         legend_spacing = float(arg[len("-legend-spacing="):])
+    elif arg.startswith("-lloc="):
+        lloc = int(arg[len("-lloc="):])
     elif arg.startswith("-o="):
         outfile = arg[3:]
     elif arg.startswith("-ol="):
@@ -93,12 +106,22 @@ for arg in sys.argv[1:]:
         domainmarkers = arg[len("-domainmarkers="):].split(",")
     elif arg.startswith("-domaincolors="):
         domaincolors = arg[len("-domaincolors="):].split(",")
+    elif arg.startswith("-topsymbols="):
+        topsymbols = arg[len("-topsymbols="):]
+    elif arg.startswith("-toptexts="):
+        toptexts = arg[len("-toptexts="):]
     elif arg.startswith("-ticks="):
         tickslist = arg[len("-ticks="):].split(",")
+    elif arg.startswith("-tickslabels="):
+        tickslabellist = arg[len("-tickslabels="):].split(",")
     elif arg.startswith("-markersize="):
         msize = float(arg[len("-markersize="):])
     elif arg.startswith("-potticks"):
         powers_of_ten_ticks = True
+    elif arg.startswith("-sansfont"):
+        sansfont = True
+    elif arg.startswith("-minorlogticks"):
+        minorlogticks = True
     else:
         files += [arg]
 
@@ -108,15 +131,14 @@ if outfile:
 matplotlib.rcParams['hatch.linewidth'] = 0.5  # previous pdf hatch linewidth
 import matplotlib.pyplot as plt
 from matplotlib import rc
-
-sansfont = False
-timesfont = False
+from matplotlib import ticker
 
 rc('text', usetex=True)
 if sansfont:
-    matplotlib.rcParams['text.latex.preamble'] = [r'\usepackage[cm]{sfmath}']
-    matplotlib.rcParams['font.family'] = 'sans-serif'
-    matplotlib.rcParams['font.sans-serif'] = 'cm'
+    matplotlib.rcParams['text.latex.preamble'] += r'\usepackage[cm]{sfmath}'
+    #matplotlib.rcParams['font.family'] = 'sans-serif'
+    #matplotlib.rcParams['font.sans-serif'] = 'cm'
+    rc('font',**{'family':'sans-serif','sans-serif':['Helvetica']})
     #\renewcommand\familydefault{\sfdefault} 
 else:
     rc('font', family='serif')
@@ -147,8 +169,8 @@ for arg in files:
         id_runtime_map = runtime_map_pairs_by_domain[dom][-1]
         if val <= lim:
             id_runtime_map[id] = val
-            if val > 0:
-                min_val = min(min_val, val)
+            #if val > 0:
+            #    min_val = min(min_val, val)
 
 for dom in runtime_map_pairs_by_domain:
     #if len(runtime_map_pairs_by_domain[dom]) == 1:
@@ -185,18 +207,25 @@ if powers_of_ten_ticks:
     #plt.minorticks_off()
     print(f"potticks {tickpos} {ticklabel}")
 elif tickslist:
-    ax.set_xticklabels(tickslist)
+    ax.set_xticklabels(tickslabellist if tickslabellist else tickslist)
     ax.set_xticks([float(x) for x in tickslist])
-    ax.set_yticklabels(tickslist)
+    ax.set_yticklabels(tickslabellist if tickslabellist else tickslist)
     ax.set_yticks([float(x) for x in tickslist])
     plt.minorticks_off()
+
+if minorlogticks:
+    if not powers_of_ten_ticks:
+        ax.xaxis.set_major_locator(ticker.LogLocator(base=10.0, subs=(1,), numticks=999))
+        ax.yaxis.set_major_locator(ticker.LogLocator(base=10.0, subs=(1,), numticks=999))
+    ax.xaxis.set_minor_locator(ticker.LogLocator(base=10.0, subs='all', numticks=999))
+    ax.yaxis.set_minor_locator(ticker.LogLocator(base=10.0, subs='all', numticks=999))
 
 plt.grid(color='#dddddd', linestyle='-', linewidth=1)
 
 plt.plot([border_lo, lim], [border_lo, lim], 'black', alpha=0.3, linestyle="--")
 #plt.plot([border_lo, border_hi], [10*border_lo, 10*border_hi], 'gray', alpha=0.3, linestyle="--", label="y=10x")
 if y2:
-    plt.plot([1/y2*border_lo, 1/y2*border_hi], [border_lo, border_hi], 'black', alpha=0.3, linestyle="-.", label="y="+str(y2)+"x")
+    plt.plot([1/y2*border_lo, 1/y2*border_hi], [border_lo, border_hi], 'black', alpha=0.3, linestyle=":", label="y="+str(y2)+"x")
 
 plt.plot([border_lo, lim], [lim, lim], 'black', alpha=1)
 plt.plot([lim, lim], [border_lo, lim], 'black', alpha=1)
@@ -249,21 +278,32 @@ for dom in runtime_map_pairs_by_domain:
 if heading:
     plt.title(heading)
 if xlabel:
-    plt.xlabel(xlabel)
+    plt.xlabel(xlabel.replace(' ', '\ '))
 else:    
-    plt.xlabel(labels[0])
+    plt.xlabel(labels[0].replace(' ', '\ '))
 if ylabel:
-    plt.ylabel(ylabel)
+    plt.ylabel(ylabel.replace(' ', '\ '))
 else:    
-    plt.ylabel(labels[1])
+    plt.ylabel(labels[1].replace(' ', '\ '))
 
-if not outfile_legend:    
+if not nolegend and not outfile_legend:    
     if legendright:
         plt.legend(bbox_to_anchor=(1.05+legend_offset_x, 0.5+legend_offset_y), loc='center left', edgecolor="black", ncol=legend_columns, labelspacing=legend_spacing, columnspacing=legend_spacing*2, handlelength=legend_spacing*2)
     elif legendbottom:
         plt.legend(bbox_to_anchor=(0.5+legend_offset_x, -0.27+legend_offset_y), loc='lower center', edgecolor="black", ncol=legend_columns, labelspacing=legend_spacing, columnspacing=legend_spacing*2, handlelength=legend_spacing*2)
+    elif lloc:
+        plt.legend(ncol=legend_columns, labelspacing=legend_spacing, columnspacing=legend_spacing*2, handlelength=legend_spacing*2, loc=lloc)
     else:
         plt.legend(ncol=legend_columns, labelspacing=legend_spacing, columnspacing=legend_spacing*2, handlelength=legend_spacing*2)
+
+if topsymbols:
+    for spec in topsymbols.split(','):
+        [xstr, ystr, symbol, color] = spec.split(';')
+        plt.plot([float(xstr)], [float(ystr)], symbol, color=color, zorder=10, markerfacecolor='None', clip_on=False)
+if toptexts:
+    for spec in toptexts.split(','):
+        [xstr, ystr, text, color] = spec.split(';')
+        plt.text(float(xstr), float(ystr), text, color=color, zorder=10, clip_on=False, ha='center', va='center')
 
 plt.tight_layout()
 if outfile:

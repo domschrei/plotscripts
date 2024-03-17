@@ -83,6 +83,10 @@ parser.add_argument('-potticksx', '--potticksx',
                     action="store_true", help='Force continuous power-of-ten ticks and labels for x axis')
 parser.add_argument('-potticksy', '--potticksy',
                     action="store_true", help='Force continuous power-of-ten ticks and labels for < axis')
+parser.add_argument('-minorlogticksx', '--minorlogticksx',
+                    action="store_true", help='Force enable all minor ticks along logarithmic x axis')
+parser.add_argument('-minorlogticksy', '--minorlogticksy',
+                    action="store_true", help='Force enable all minor ticks along logarithmic y axis')
 
 parser.add_argument('-legend-spacing', '--legend-spacing', type=float, default=0.5, help='Vertical spacing between legend items')
 parser.add_argument('-lloc', '--lloc', '-legend-location', '--legend-location', type=int, default=0,
@@ -122,11 +126,17 @@ parser.add_argument('-ticksx', '--ticksx', '-ticks-x', '--ticks-x', type=str, de
                     help='Comma-separated tick values for x axis')
 parser.add_argument('-ticksy', '--ticksy', '-ticks-y', '--ticks-y', type=str, default='',
                     help='Comma-separated tick values for y axis')
+parser.add_argument('-tickslabelsx', '--tickslabelsx', '-ticks-labels-x', '--ticks-labels-x', type=str, default='',
+                    help='Comma-separated tick labels for x axis')
+parser.add_argument('-tickslabelsy', '--tickslabelsy', '-ticks-labels-y', '--ticks-labels-y', type=str, default='',
+                    help='Comma-separated tick labels for y axis')
 parser.add_argument('-ticksy2', '--ticksy2', '-ticks-y2', '--ticks-y2', type=str, default='',
                     help='Comma-separated tick values for 2nd y axis')
 
 parser.add_argument('-topsymbols', type=str, default='',
                     help='Comma-separated specifications for symbols to draw at the plots top-z order. Each specification: "x;y;symbol;color"')
+parser.add_argument('-toptexts', type=str, default='',
+                    help='Comma-separated specifications for text to write at the plots top-z order. Each specification: "x;y;text;color"')
 
 move_unqualified_args_to_front()
 args = parser.parse_args()
@@ -136,6 +146,8 @@ args.linestyleslist = args.linestyles.split(',') if args.linestyles else []
 args.linewidthslist = args.linewidths.split(',') if args.linewidths else []
 args.ticksxlist = args.ticksx.split(',') if args.ticksx else []
 args.ticksylist = args.ticksy.split(',') if args.ticksy else []
+args.tickslabelsxlist = args.tickslabelsx.split(',') if args.tickslabelsx else []
+args.tickslabelsylist = args.tickslabelsy.split(',') if args.tickslabelsy else []
 args.ticksy2list = args.ticksy2.split(',') if args.ticksy2 else []
 args.labellist = [l for labels in args.label for l in labels]
 
@@ -147,12 +159,14 @@ if args.o:
 matplotlib.rcParams['hatch.linewidth'] = 0.5  # previous pdf hatch linewidth
 import matplotlib.pyplot as plt
 from matplotlib import rc
+from matplotlib import ticker
 
 rc('text', usetex=True)
 if args.sans_font:
     matplotlib.rcParams['text.latex.preamble'] += r'\usepackage[cm]{sfmath}'
-    matplotlib.rcParams['font.family'] = 'sans-serif'
-    matplotlib.rcParams['font.sans-serif'] = 'cm'
+    #matplotlib.rcParams['font.family'] = 'sans-serif'
+    #matplotlib.rcParams['font.sans-serif'] = 'cm'
+    rc('font',**{'family':'sans-serif','sans-serif':['Helvetica']})
     #\renewcommand\familydefault{\sfdefault} 
 else:
     rc('font', family='serif')
@@ -279,7 +293,7 @@ for d in data:
     
     if i < len(args.labellist):
         if args.labellist[i] != 'None':
-            kwargs['label'] = args.labellist[i]
+            kwargs['label'] = args.labellist[i].replace(' ', '\ ')
     else:
         kwargs['label'] = datanames[i].replace('_', '-')
     
@@ -337,9 +351,9 @@ else:
 
 if not args.nolegend:
     if args.legendright:
-        leg = plt.legend(bbox_to_anchor=(1.05, 0.5), loc='center left', edgecolor="black", labelspacing=args.legend_spacing)
+        leg = plt.legend(bbox_to_anchor=(1.05, 0.5), loc='center left', edgecolor="black", labelspacing=args.legend_spacing, alignment="right")
     else:
-        leg = plt.legend(loc=args.lloc, labelspacing=args.legend_spacing)
+        leg = plt.legend(loc=args.lloc, labelspacing=args.legend_spacing, alignment="right")
     if args.nolegendborder:
         leg.get_frame().set_linewidth(0.0)
 
@@ -371,18 +385,29 @@ if args.potticksy or args.potticks:
 
 if not args.potticks and not args.potticksx and args.ticksxlist:
     print("xticks")
-    ax.set_xticklabels(args.ticksxlist)
+    ax.set_xticklabels(args.tickslabelsxlist if args.tickslabelsxlist else args.ticksxlist)
     ax.set_xticks([float(x) for x in args.ticksxlist])
-    plt.minorticks_off()
+    #plt.minorticks_off()
 if not args.potticks and not args.potticksy and args.ticksylist:
     print("yticks")
-    ax.set_yticklabels(args.ticksylist)
+    ax.set_yticklabels(args.tickslabelsylist if args.tickslabelsylist else args.ticksylist)
     ax.set_yticks([float(x) for x in args.ticksylist])
-    plt.minorticks_off()
+    #plt.minorticks_off()
 if args.ticksy2list:
     print("y2ticks")
     ax2.set_yticklabels(args.ticksy2list)
     ax2.set_yticks([float(x) for x in args.ticksy2list])
+    #plt.minorticks_off()
+
+if args.minorlogticksx:
+    #if not args.potticks and not args.potticksx:
+    #    ax.xaxis.set_major_locator(ticker.LogLocator(base=10.0, subs=(1,), numticks=999))
+    ax.xaxis.set_minor_locator(ticker.LogLocator(base=10.0, subs='all', numticks=999))
+elif args.minorlogticksy:
+    #if not args.potticks and not args.potticksy:
+    #    ax.yaxis.set_major_locator(ticker.LogLocator(base=10.0, subs=(1,), numticks=999))
+    ax.yaxis.set_minor_locator(ticker.LogLocator(base=10.0, subs='all', numticks=999))
+else:
     plt.minorticks_off()
 
 plt.tight_layout()
@@ -391,6 +416,10 @@ if args.topsymbols:
     for spec in args.topsymbols.split(','):
         [xstr, ystr, symbol, color] = spec.split(';')
         plt.plot([float(xstr)], [float(ystr)], symbol, color=color, zorder=10, markerfacecolor='None', clip_on=False)
+if args.toptexts:
+    for spec in args.toptexts.split(','):
+        [xstr, ystr, text, color] = spec.split(';')
+        plt.text(float(xstr), float(ystr), text, color=color, zorder=10, clip_on=False, ha='center', va='center')
 
 if args.o:
     plt.savefig(args.o) #, dpi=600, format='eps')
