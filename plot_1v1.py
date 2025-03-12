@@ -278,13 +278,13 @@ for dom in runtime_map_pairs_by_domain:
 if heading:
     plt.title(heading)
 if xlabel:
-    plt.xlabel(xlabel.replace(' ', '\ '))
+    plt.xlabel(xlabel.replace(' ', '\\ '))
 else:    
-    plt.xlabel(labels[0].replace(' ', '\ '))
+    plt.xlabel(labels[0].replace(' ', '\\ '))
 if ylabel:
-    plt.ylabel(ylabel.replace(' ', '\ '))
+    plt.ylabel(ylabel.replace(' ', '\\ '))
 else:    
-    plt.ylabel(labels[1].replace(' ', '\ '))
+    plt.ylabel(labels[1].replace(' ', '\\ '))
 
 if not nolegend and not outfile_legend:    
     if legendright:
